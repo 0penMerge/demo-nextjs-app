@@ -58,36 +58,6 @@ Open [http://localhost:3000](http://localhost:3000).
 
 The application origin must exactly match an origin allowed by the OpenMerge Link-token configuration. Provider OAuth callback URLs belong to the OpenMerge Embed deployment, not to this customer application.
 
-## How the two-way acceptance flow works
-
-```mermaid
-sequenceDiagram
-    participant Browser
-    participant Next as Next.js server
-    participant OM as OpenMerge API
-    participant Temporal
-    participant CRM
-
-    Browser->>Next: Request CRM link session
-    Next->>OM: Create link token with workspace API key
-    OM-->>Browser: Short-lived token only
-    Browser->>CRM: OAuth through hosted Link widget
-    CRM-->>OM: OAuth callback and linked account
-    Browser->>Next: Pull now
-    Next->>OM: Queue incremental model sync
-    OM->>Temporal: Start durable sync workflow
-    Temporal->>CRM: Read changed provider records
-    Temporal-->>OM: Materialize unified records
-    Browser->>Next: Read unified model
-    Next->>OM: Tenant + account scoped read
-    Browser->>Next: Push field changes + idempotency key
-    Next->>OM: Submit writeback
-    OM->>Temporal: Start durable write workflow
-    Temporal->>CRM: Update provider record
-    Next->>OM: Wait for terminal write state
-    Next->>OM: Queue reconciliation sync
-```
-
 ## Server boundary
 
 All calls authenticated with the workspace API key live under `app/api/openmerge`. The browser receives only:
