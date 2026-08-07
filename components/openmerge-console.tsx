@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useOpenMergeLink } from "@openmerge/react"
 import type { LinkedAccount, SyncRun, UnifiedRecord, Writeback } from "@openmerge/core"
 import {
@@ -18,19 +19,17 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
-  Sparkles,
   Unplug,
   Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { DemoCatalog } from "@/lib/catalog-types"
 import {
-  CRM_PROVIDERS,
-  type CrmModel,
   pickWritableData,
   providerDefinition,
   supportedModels,
   writableFields,
-} from "@/lib/crm"
+} from "@/lib/catalog-types"
 
 type LinkSession = {
   token: string
@@ -198,11 +197,11 @@ function EmptyState({
 }
 
 export function OpenMergeConsole() {
-  const [endUserId, setEndUserId] = useState("demo-customer-001")
   const [session, setSession] = useState<LinkSession>()
   const [accounts, setAccounts] = useState<LinkedAccount[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState("")
-  const [model, setModel] = useState<CrmModel>("Contact")
+  const [model, setModel] = useState("Contact")
+  const [catalog, setCatalog] = useState<DemoCatalog>({ providers: [], models: [] })
   const [records, setRecords] = useState<RecordPage>({
     records: [],
     nextCursor: null,
@@ -228,8 +227,8 @@ export function OpenMergeConsole() {
     [records.records, selectedRecordId],
   )
   const availableModels = useMemo(
-    () => supportedModels(selectedAccount?.provider || ""),
-    [selectedAccount?.provider],
+    () => supportedModels(catalog, selectedAccount?.provider || ""),
+    [catalog, selectedAccount?.provider],
   )
 
   const pushEvent = useCallback(
@@ -250,6 +249,11 @@ export function OpenMergeConsole() {
     [],
   )
 
+  const refreshCatalog = useCallback(async () => {
+    const next = await jsonRequest<DemoCatalog>("/api/openmerge/catalog")
+    setCatalog(next)
+    return next
+  }, [])
   const refreshAccounts = useCallback(async () => {
     const next = await jsonRequest<LinkedAccount[]>("/api/openmerge/accounts")
     setAccounts(next)
@@ -297,8 +301,8 @@ export function OpenMergeConsole() {
   )
 
   useEffect(() => {
-    void Promise.all([refreshHealth(), refreshAccounts()]).catch(() => undefined)
-  }, [refreshAccounts, refreshHealth])
+    void Promise.all([refreshHealth(), refreshAccounts(), refreshCatalog()]).catch(() => undefined)
+  }, [refreshAccounts, refreshCatalog, refreshHealth])
 
   useEffect(() => {
     if (!selectedAccount) return
@@ -311,13 +315,13 @@ export function OpenMergeConsole() {
     if (!selectedRecord || !selectedAccount) return
     setChanges(
       JSON.stringify(
-        pickWritableData(selectedAccount.provider, model, selectedRecord.data),
+        pickWritableData(catalog, selectedAccount.provider, model, selectedRecord.data),
         null,
         2,
       ),
     )
     setIdempotencyKey(crypto.randomUUID())
-  }, [model, selectedAccount, selectedRecord])
+  }, [catalog, model, selectedAccount, selectedRecord])
 
   async function run<T>(
     key: string,
@@ -355,7 +359,7 @@ export function OpenMergeConsole() {
           {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ endUserOriginId: endUserId }),
+            body: JSON.stringify({}),
           },
         )
         setSession(next)
@@ -488,7 +492,7 @@ export function OpenMergeConsole() {
         <LinkLauncher
           session={session}
           onSuccess={() => {
-            const provider = providerDefinition(intentProvider)?.name || "CRM"
+            const provider = providerDefinition(catalog, intentProvider)?.name || "CRM"
             setSession(undefined)
             pushEvent("success", "Account connected", `${provider} OAuth completed.`)
             void Promise.all([refreshAccounts(), refreshHealth()])
@@ -507,7 +511,7 @@ export function OpenMergeConsole() {
 
       <div className="topbar">
         <div className="brand">
-          <span className="brand-mark"><Sparkles size={17} /></span>
+          <span className="brand-mark"><Image src="/openmerge-mark.svg" alt="" width={28} height={28} aria-hidden="true" /></span>
           <span>OpenMerge</span>
           <span className="brand-slash">/</span>
           <span className="brand-muted">CRM starter</span>
@@ -528,18 +532,13 @@ export function OpenMergeConsole() {
             an idempotent provider writeback without exposing your OpenMerge key.
           </p>
           <div className="hero-actions">
-            <label className="customer-input">
+            <span className="customer-input">
               <span>Customer identity</span>
-              <input
-                value={endUserId}
-                onChange={(event) => setEndUserId(event.target.value)}
-                placeholder="your-customer-id"
-                maxLength={200}
-              />
-            </label>
+              <strong>Bound to signed demo session</strong>
+            </span>
             <button
               className="button primary"
-              disabled={Boolean(busy) || !endUserId.trim()}
+              disabled={Boolean(busy)}
               onClick={() => void launchConnect()}
             >
               {busy === "connect" ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
@@ -597,7 +596,7 @@ export function OpenMergeConsole() {
       </div>
 
       <div className="provider-grid">
-        {CRM_PROVIDERS.map((provider) => {
+        {catalog.providers.map((provider) => {
           const linked = providerAccounts(provider.id)
           const healthy = linked.filter((account) => account.status === "healthy").length
           return (
@@ -620,7 +619,7 @@ export function OpenMergeConsole() {
               </div>
               <button
                 className="card-action"
-                disabled={Boolean(busy) || !endUserId.trim()}
+                disabled={Boolean(busy)}
                 onClick={() => void launchConnect(provider.id)}
               >
                 {linked.length ? "Add another account" : "Connect account"}
@@ -660,7 +659,7 @@ export function OpenMergeConsole() {
           />
         ) : (
           accounts.map((account) => {
-            const provider = providerDefinition(account.provider)
+            const provider = providerDefinition(catalog, account.provider)
             const selected = account.id === selectedAccountId
             return (
               <button
@@ -697,7 +696,7 @@ export function OpenMergeConsole() {
         <div className="workbench-header">
           <div>
             <span className="section-label">Two-way workbench</span>
-            <h2>{selectedAccount ? providerDefinition(selectedAccount.provider)?.name || selectedAccount.provider : "Select an account"}</h2>
+            <h2>{selectedAccount ? providerDefinition(catalog, selectedAccount.provider)?.name || selectedAccount.provider : "Select an account"}</h2>
           </div>
           {selectedAccount && (
             <div className="workbench-actions">
@@ -755,7 +754,7 @@ export function OpenMergeConsole() {
                 </button>
               ))}
               <span className="model-hint">
-                Writable: {writableFields(selectedAccount.provider, model).join(", ") || "none"}
+                Writable: {writableFields(catalog, selectedAccount.provider, model).join(", ") || "none"}
               </span>
             </div>
             <div className="workbench-grid">

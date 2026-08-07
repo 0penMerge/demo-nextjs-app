@@ -1,48 +1,58 @@
 import { describe, expect, it } from "vitest"
+import type { DemoCatalog } from "@/lib/catalog-types"
 import {
-  CRM_PROVIDERS,
   pickWritableData,
+  providerDefinition,
   supportedModels,
   writableFields,
-} from "@/lib/crm"
+} from "@/lib/catalog-types"
 
-describe("CRM provider contract", () => {
-  it("keeps the public starter aligned with all four connectors", () => {
-    expect(CRM_PROVIDERS.map((provider) => provider.id)).toEqual([
-      "hubspot",
-      "salesforce",
-      "pipedrive",
-      "zoho_crm",
-    ])
+const catalog: DemoCatalog = {
+  providers: [
+    {
+      id: "connector_x",
+      name: "Connector X",
+      mark: "CX",
+      description: "Installed from a connector bundle",
+      models: ["Contact", "CustomObject"],
+    },
+  ],
+  models: [
+    {
+      id: "Contact",
+      fields: ["email", "first_name", "provider_internal_id"],
+      writableByProvider: { connector_x: ["email", "first_name"] },
+    },
+    {
+      id: "CustomObject",
+      fields: ["name"],
+      writableByProvider: { connector_x: ["name"] },
+    },
+  ],
+}
+
+describe("dynamic connector catalog contract", () => {
+  it("discovers providers and models without source-code constants", () => {
+    expect(providerDefinition(catalog, "connector_x")?.name).toBe("Connector X")
+    expect(supportedModels(catalog, "connector_x")).toEqual(["Contact", "CustomObject"])
+    expect(supportedModels(catalog, "not_installed")).toEqual([])
   })
 
-  it("exposes Contact for every provider and Account only where implemented", () => {
-    for (const provider of CRM_PROVIDERS) {
-      expect(supportedModels(provider.id)).toContain("Contact")
-    }
-    expect(supportedModels("hubspot")).toContain("Account")
-    expect(supportedModels("pipedrive")).toContain("Account")
-    expect(supportedModels("salesforce")).not.toContain("Account")
-    expect(supportedModels("zoho_crm")).not.toContain("Account")
+  it("uses provider-specific writable fields from model coverage", () => {
+    expect(writableFields(catalog, "connector_x", "Contact")).toEqual(["email", "first_name"])
+    expect(writableFields(catalog, "not_installed", "Contact")).toEqual([])
   })
 
-  it("allows only provider-mapped write fields", () => {
-    expect(writableFields("hubspot", "Contact")).toContain("owner")
-    expect(writableFields("salesforce", "Contact")).toContain("account")
-    expect(writableFields("pipedrive", "Account")).toEqual(["name", "owner"])
-    expect(writableFields("zoho_crm", "Account")).toEqual([])
-  })
-
-  it("filters materialized data to the provider write contract", () => {
+  it("filters materialized data to the live provider write contract", () => {
     expect(
-      pickWritableData("hubspot", "Contact", {
+      pickWritableData(catalog, "connector_x", "Contact", {
         first_name: "Ada",
         email: "ada@example.com",
         provider_internal_id: "never-write-this",
       }),
     ).toEqual({
-      first_name: "Ada",
       email: "ada@example.com",
+      first_name: "Ada",
     })
   })
 })

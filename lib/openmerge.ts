@@ -24,26 +24,21 @@ export function workspaceId() {
 }
 
 export function embedUrl() {
-  return new URL(
-    process.env.NEXT_PUBLIC_OPENMERGE_EMBED_URL?.trim() || "http://localhost:3001",
-  ).origin
+  return new URL(process.env.NEXT_PUBLIC_OPENMERGE_EMBED_URL?.trim() || "http://localhost:3001").origin
 }
 
 export function applicationOrigin() {
   return new URL(
-    process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000",
+    process.env.OPENMERGE_APP_URL?.trim() ||
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      "http://localhost:3000",
   ).origin
 }
 
 export function publicConfiguration() {
   return {
-    configured: Boolean(
-      process.env.OPENMERGE_API_KEY?.trim() &&
-      process.env.OPENMERGE_WORKSPACE_ID?.trim(),
-    ),
-    apiOrigin: new URL(
-      process.env.OPENMERGE_API_URL?.trim() || "http://localhost:8000",
-    ).origin,
+    configured: Boolean(process.env.OPENMERGE_API_KEY?.trim() && process.env.OPENMERGE_WORKSPACE_ID?.trim()),
+    apiOrigin: new URL(process.env.OPENMERGE_API_URL?.trim() || "http://localhost:8000").origin,
     embedOrigin: embedUrl(),
   }
 }

@@ -1,48 +1,28 @@
 import { NextResponse } from "next/server"
-import { failure, objectBody, stringField } from "@/lib/http"
-import {
-  applicationOrigin,
-  embedUrl,
-  openmerge,
-  workspaceId,
-} from "@/lib/openmerge"
+import { authorizedAccount } from "@/lib/account-access"
+import { requireDemoSession } from "@/lib/demo-auth"
+import { failure, objectBody } from "@/lib/http"
+import { applicationOrigin, embedUrl, openmerge, workspaceId } from "@/lib/openmerge"
 
 export async function POST(request: Request) {
   try {
+    const session = requireDemoSession(request, { mutation: true })
     const body = await objectBody(request)
-    const linkedAccountId =
-      typeof body.linkedAccountId === "string"
-        ? body.linkedAccountId.trim()
-        : ""
+    const linkedAccountId = typeof body.linkedAccountId === "string" ? body.linkedAccountId.trim() : ""
+    if (linkedAccountId) await authorizedAccount(linkedAccountId, session, request.signal)
 
     const token = linkedAccountId
       ? await openmerge().linkTokens.reconnect(
-          {
-            workspaceId: workspaceId(),
-            linkedAccountId,
-            hostOrigin: applicationOrigin(),
-          },
+          { workspaceId: workspaceId(), linkedAccountId, endUserOriginId: session.endUserOriginId, hostOrigin: applicationOrigin() },
           { signal: request.signal },
         )
       : await openmerge().linkTokens.create(
-          {
-            workspaceId: workspaceId(),
-            endUserOriginId: stringField(body, "endUserOriginId", {
-              max: 200,
-            }),
-            allowedCategories: ["crm"],
-            hostOrigin: applicationOrigin(),
-          },
+          { workspaceId: workspaceId(), endUserOriginId: session.endUserOriginId, allowedCategories: ["crm"], hostOrigin: applicationOrigin() },
           { signal: request.signal },
         )
 
     return NextResponse.json(
-      {
-        token: token.token,
-        expiresIn: token.expiresIn,
-        hostedUrl: token.hostedUrl,
-        embedUrl: embedUrl(),
-      },
+      { token: token.token, expiresIn: token.expiresIn, hostedUrl: token.hostedUrl, embedUrl: embedUrl() },
       { status: 201 },
     )
   } catch (error) {

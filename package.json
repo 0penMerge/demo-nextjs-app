@@ -16,10 +16,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@openmerge/core": "^0.0.1",
-    "@openmerge/react": "^0.0.1",
+    "@openmerge/core": "^0.1.0",
+    "@openmerge/react": "^0.1.0",
     "lucide-react": "^1.25.0",
-    "next": "16.2.10",
+    "next": "16.3.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "server-only": "^0.0.1",
@@ -34,8 +34,10 @@
   },
   "overrides": {
     "sharp": "$sharp",
+    "undici": "7.29.0",
     "next": {
-      "postcss": "^8.5.10"
-    }
+      "postcss": "8.5.26"
+    },
+    "postcss": "8.5.26"
   }
 }

@@ -43,9 +43,19 @@ Populate `.env.local`:
 ```dotenv
 OPENMERGE_API_KEY=om_...
 OPENMERGE_WORKSPACE_ID=...
+OPENMERGE_DEMO_ACCESS_KEY=generate-a-long-random-access-key
+OPENMERGE_DEMO_SESSION_SECRET=generate-an-independent-32-byte-or-longer-secret
+OPENMERGE_DEMO_END_USER_ORIGIN_ID=demo-customer-001
+OPENMERGE_DEMO_SESSION_SECONDS=28800
 OPENMERGE_API_URL=https://api.openmerge.dev
 NEXT_PUBLIC_OPENMERGE_EMBED_URL=https://widgets.openmerge.dev
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+OPENMERGE_APP_URL=http://localhost:3000
+```
+
+Generate independent values rather than reusing the OpenMerge API key:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
 Run the app:
@@ -69,10 +79,24 @@ All calls authenticated with the workspace API key live under `app/api/openmerge
 
 Never place `OPENMERGE_API_KEY` in a variable prefixed with `NEXT_PUBLIC_`. Never commit `.env.local`.
 
+The starter is fail-closed: OpenMerge routes return `503` until the three
+`OPENMERGE_DEMO_*` access variables are configured, and return `401` without a valid signed
+session. The access form exchanges `OPENMERGE_DEMO_ACCESS_KEY` for a short-lived, HMAC-signed,
+`HttpOnly`, `SameSite=Strict` cookie. State-changing routes also require the exact
+`OPENMERGE_APP_URL` origin.
+
+`OPENMERGE_DEMO_END_USER_ORIGIN_ID` is the only customer identity the hosted demo may access.
+The server ignores browser-supplied tenant identifiers, filters account listings to this identity,
+and re-authorizes every linked-account ID before reconnect, sync, record read, or writeback. In a
+real product, replace the access-key route with your identity provider session and derive the
+end-user ID from a stable server-side subject; keep the account ownership checks unchanged.
+
 The demo adds several safeguards on top of the SDK:
 
 - exact workspace scoping on every data request;
 - provider/model capability checks before reads and syncs;
+- fail-closed demo authentication and same-origin mutation checks;
+- server-derived end-user identity and per-account ownership authorization;
 - provider-specific write-field allowlists;
 - retry-stable idempotency keys;
 - terminal writeback waiting before reporting success;
@@ -93,6 +117,8 @@ npm run build
 Browser-level acceptance requires a running OpenMerge stack and real provider developer accounts. Test at least:
 
 - Link opens and closes without consuming a token prematurely.
+- Access is denied before login and after cookie tampering or expiry.
+- A linked-account ID belonging to another end user returns `404` for list-independent operations.
 - OAuth creates the expected linked account.
 - `Pull now` queues the models supported by that connector.
 - Unified records are readable only under the selected account.
@@ -103,6 +129,6 @@ Browser-level acceptance requires a running OpenMerge stack and real provider de
 
 ## Deploying
 
-Set all five environment variables in the hosting platform. Use the public HTTPS origins of the OpenMerge API, Embed app, and this Next.js application. Keep the two server-only variables out of client build logs and browser configuration.
+Set every required variable from `.env.example` in the hosting platform. Use the public HTTPS origins of the OpenMerge API, Embed app, and this Next.js application. Keep all `OPENMERGE_*` values server-only and out of client build logs and browser configuration. Rotate the demo access key independently from the workspace API key.
 
 The app is compatible with any Node-capable Next.js host. `npm run build && npm start` is the production entrypoint.
