@@ -907,7 +907,7 @@ export function OpenMergeConsole() {
                           <small>
                             {summaryFields(record.data)
                               .map(([key, value]) => `${key}: ${String(value)}`)
-                              .join(" Â· ") || record.unified_id}
+                              .join(" \u00b7 ") || record.unified_id}
                           </small>
                         </span>
                         <ChevronRight size={15} />
@@ -1015,9 +1015,9 @@ export function OpenMergeConsole() {
 
       <footer>
         <span><ShieldCheck size={14} /> Tenant-scoped server routes</span>
-        <span>â€¢</span>
+        <span aria-hidden="true">{"\u00b7"}</span>
         <span>Idempotent writes</span>
-        <span>â€¢</span>
+        <span aria-hidden="true">{"\u00b7"}</span>
         <span>CRM-only link tokens</span>
       </footer>
     </section>

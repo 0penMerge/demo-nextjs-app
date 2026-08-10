@@ -10,3 +10,4 @@ output/
 !.env.example
 design-qa-*.png
 reference-*.png
+.playwright-cli/
