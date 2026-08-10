@@ -6,11 +6,13 @@ This repository is deliberately more than a visual example. It is an acceptance 
 
 1. Mint a short-lived, CRM-scoped Link token on the Next.js server.
 2. Complete provider OAuth in the OpenMerge hosted widget.
-3. List tenant-scoped linked accounts.
-4. Manually queue an incremental pull sync.
-5. Read the materialized unified `Contact` or `Account` model.
-6. Update an existing record with an idempotent writeback.
-7. Wait for a terminal provider result and queue reconciliation.
+3. Discover the connected CRM's live fields and data types when custom mapping is enabled.
+4. Map Developer IR fields and activate the connection-specific execution plan.
+5. List tenant-scoped linked accounts.
+6. Manually queue an incremental pull sync.
+7. Read the materialized unified `Contact` or `Account` model.
+8. Update an existing record with an idempotent writeback.
+9. Wait for a terminal provider result and queue reconciliation.
 
 ## Supported demo contract
 
@@ -66,13 +68,14 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-The application origin must exactly match an origin allowed by the OpenMerge Link-token configuration. Provider OAuth callback URLs belong to the OpenMerge Embed deployment, not to this customer application.
+The application origin must exactly match an origin allowed by the OpenMerge Link-token configuration. Provider OAuth callback URLs belong to the OpenMerge API deployment, not to this customer application or the Embed deployment. The OpenMerge Integrations UI shows the exact callback URL that must be registered for each provider.
 
 ## Server boundary
 
 All calls authenticated with the workspace API key live under `app/api/openmerge`. The browser receives only:
 
 - short-lived Link tokens;
+- short-lived, account-scoped field-mapping tokens;
 - linked-account metadata;
 - unified records authorized for this workspace;
 - accepted sync runs and terminal writeback results.
@@ -101,6 +104,7 @@ The demo adds several safeguards on top of the SDK:
 - retry-stable idempotency keys;
 - terminal writeback waiting before reporting success;
 - explicit reconciliation after a successful provider update;
+- provider-schema discovery and connection-specific mapping activation through a server-authorized route;
 - upstream status, request ID, and retryability propagation without leaking credentials.
 
 ## Verification
@@ -114,12 +118,25 @@ npm audit --audit-level=high
 npm run build
 ```
 
+The repository also contains a live SDK contract. Set the four
+`OPENMERGE_LIVE_*` values documented in `.env.example`, then run:
+
+```powershell
+npm run contract:mapping:live
+```
+
+This calls the configured OpenMerge deployment through the published `@openmerge/core` package
+and verifies account isolation, the persisted Developer IR generation, live provider-schema
+discovery, active connection mapping, and delivery of the expected custom field.
+
 Browser-level acceptance requires a running OpenMerge stack and real provider developer accounts. Test at least:
 
 - Link opens and closes without consuming a token prematurely.
 - Access is denied before login and after cookie tampering or expiry.
 - A linked-account ID belonging to another end user returns `404` for list-independent operations.
 - OAuth creates the expected linked account.
+- Required field mapping blocks sync until every required Developer IR field is mapped.
+- `Edit mapping` reopens the account-scoped widget without reconnecting OAuth.
 - `Pull now` queues the models supported by that connector.
 - Unified records are readable only under the selected account.
 - A writeback reaches `completed` and changes the provider record.

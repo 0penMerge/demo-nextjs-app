@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useOpenMergeLink } from "@openmerge/react"
+import { useOpenMergeFieldMapping, useOpenMergeLink } from "@openmerge/react"
 import type { LinkedAccount, SyncRun, UnifiedRecord, Writeback } from "@openmerge/core"
 import {
   Activity,
@@ -19,6 +19,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
+  SlidersHorizontal,
   Unplug,
   Zap,
 } from "lucide-react"
@@ -178,6 +179,41 @@ function LinkLauncher({
   return null
 }
 
+function FieldMappingLauncher({
+  session,
+  onCompleted,
+  onClose,
+  onError,
+}: {
+  session: LinkSession
+  onCompleted(payload: { linked_account_id: string; job_id: string; models: string[] }): void
+  onClose(): void
+  onError(message: string): void
+}) {
+  const settled = useRef(false)
+  const { open } = useOpenMergeFieldMapping({
+    token: session.token,
+    embedUrl: session.embedUrl,
+    onCompleted: (payload) => {
+      settled.current = true
+      onCompleted(payload)
+    },
+    onClose: () => {
+      if (!settled.current) onClose()
+    },
+    onError: ({ message }) => {
+      settled.current = true
+      onError(message)
+    },
+  })
+
+  useEffect(() => {
+    open()
+  }, [open])
+
+  return null
+}
+
 function EmptyState({
   icon,
   title,
@@ -198,6 +234,7 @@ function EmptyState({
 
 export function OpenMergeConsole() {
   const [session, setSession] = useState<LinkSession>()
+  const [mappingSession, setMappingSession] = useState<LinkSession>()
   const [accounts, setAccounts] = useState<LinkedAccount[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState("")
   const [model, setModel] = useState("Contact")
@@ -395,6 +432,28 @@ export function OpenMergeConsole() {
     )
   }
 
+  async function launchFieldMapping(account: LinkedAccount) {
+    await run(
+      `mapping-${account.id}`,
+      async () => {
+        const next = await jsonRequest<LinkSession>(
+          "/api/openmerge/field-mapping-token",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ linkedAccountId: account.id }),
+          },
+        )
+        setMappingSession(next)
+        return next
+      },
+      () => ({
+        title: "Field mapping session created",
+        detail: `${account.provider_display_name || account.provider} live schema discovery is running.`,
+      }),
+    )
+  }
+
   async function pullNow() {
     if (!selectedAccount) return
     const result = await run(
@@ -505,6 +564,32 @@ export function OpenMergeConsole() {
             setSession(undefined)
             setError(message)
             pushEvent("error", "Connect flow failed", message)
+          }}
+        />
+      )}
+      {mappingSession && (
+        <FieldMappingLauncher
+          session={mappingSession}
+          onCompleted={(payload) => {
+            setMappingSession(undefined)
+            pushEvent(
+              "success",
+              "Connection mapping activated",
+              `${payload.models.join(", ")} compiled into the connection-specific execution plan.`,
+            )
+            void Promise.all([
+              refreshAccounts(),
+              loadRecords(payload.linked_account_id),
+            ])
+          }}
+          onClose={() => {
+            setMappingSession(undefined)
+            pushEvent("info", "Field mapping closed", "No mapping changes were activated.")
+          }}
+          onError={(message) => {
+            setMappingSession(undefined)
+            setError(message)
+            pushEvent("error", "Field mapping failed", message)
           }}
         />
       )}
@@ -672,7 +757,12 @@ export function OpenMergeConsole() {
                 </span>
                 <span className="account-identity">
                   <strong>{account.provider_display_name || provider?.name || account.provider}</strong>
-                  <small>{account.end_user_label || account.end_user_origin_id}</small>
+                  <small>
+                    {account.end_user_label || account.end_user_origin_id}
+                    {account.mapping_status
+                      ? ` · mapping ${account.mapping_status.replaceAll("_", " ")}`
+                      : ""}
+                  </small>
                 </span>
                 <span className={`status-pill ${statusTone(account.status)}`}>
                   <span />{account.status.replace("_", " ")}
@@ -711,9 +801,27 @@ export function OpenMergeConsole() {
                 </button>
               ) : (
                 <>
+                  {selectedAccount.mapping_status && (
+                    <button
+                      className={`button ${selectedAccount.mapping_required ? "secondary" : "ghost"}`}
+                      disabled={Boolean(busy)}
+                      onClick={() => void launchFieldMapping(selectedAccount)}
+                    >
+                      {busy === `mapping-${selectedAccount.id}` ? (
+                        <LoaderCircle className="spin" size={15} />
+                      ) : (
+                        <SlidersHorizontal size={15} />
+                      )}
+                      {selectedAccount.mapping_required ? "Complete mapping" : "Edit mapping"}
+                    </button>
+                  )}
                   <button
                     className="button ghost"
-                    disabled={Boolean(busy) || selectedAccount.status !== "healthy"}
+                    disabled={
+                      Boolean(busy) ||
+                      selectedAccount.status !== "healthy" ||
+                      selectedAccount.mapping_required
+                    }
                     onClick={() => void pullNow()}
                   >
                     {busy === "sync" ? <LoaderCircle className="spin" size={15} /> : <ArrowDownToLine size={15} />}
@@ -721,7 +829,11 @@ export function OpenMergeConsole() {
                   </button>
                   <button
                     className="button secondary"
-                    disabled={Boolean(busy) || selectedAccount.status !== "healthy"}
+                    disabled={
+                      Boolean(busy) ||
+                      selectedAccount.status !== "healthy" ||
+                      selectedAccount.mapping_required
+                    }
                     onClick={() => void readRecords()}
                   >
                     {busy === "records" ? <LoaderCircle className="spin" size={15} /> : <Database size={15} />}
@@ -840,7 +952,11 @@ export function OpenMergeConsole() {
                     </div>
                     <button
                       className="button primary wide"
-                      disabled={Boolean(busy) || selectedAccount.status !== "healthy"}
+                      disabled={
+                        Boolean(busy) ||
+                        selectedAccount.status !== "healthy" ||
+                        selectedAccount.mapping_required
+                      }
                       onClick={() => void pushAndReconcile()}
                     >
                       {busy === "writeback" ? (

@@ -13,11 +13,12 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "contract:mapping:live": "node --env-file=.env.local scripts/live-mapping-contract.mjs"
   },
   "dependencies": {
-    "@openmerge/core": "^0.1.0",
-    "@openmerge/react": "^0.1.0",
+    "@openmerge/core": "^0.2.0",
+    "@openmerge/react": "^0.2.0",
     "lucide-react": "^1.25.0",
     "next": "16.3.0",
     "react": "19.2.7",
